@@ -9,6 +9,8 @@ const starkStruct = require("./starkstruct.json");
 const fs = require("fs");
 
 const fileCachePil = "./poseidon_test"
+const  pil2circom = require('../node_modules/pil-stark/src/pil2circom');
+
 async function generateAndVerifyPilStark(inputs) {
     // Generate constants (preprocessed)
     console.log(pilFile)
@@ -25,6 +27,7 @@ async function generateAndVerifyPilStark(inputs) {
       cmPols.saveToFile(fileCachePil + ".cm")
     }
 
+    
     // 
     await poseidonExecutor.buildConstants(constPols.PoseidonG);
     const executionResult = await poseidonExecutor.execute(cmPols.PoseidonG, inputs); 
@@ -43,16 +46,34 @@ async function generateAndVerifyPilStark(inputs) {
     const setup = await starkSetup(constPols, pil, starkStruct);
 
     // Generate the stark
-    const proverResult = await starkGen(cmPols,constPols,setup.constTree,setup.starkInfo);
+    const starkProof = await starkGen(cmPols,constPols,setup.constTree,setup.starkInfo);
 
-    console.log("STARK Proof:",proverResult)
+    // console.log("STARK Proof:",starkProof)
+    if (typeof fileCachePil !== "undefined") {
+      await fs.promises.writeFile(fileCachePil + ".stark_proof.json", JSON.stringify(starkProof, stringifyBigInt) + "\n", "utf8");
+    }
     // Verify the stark
-    const verifierResult= await starkVerify(proverResult.proof, proverResult.publics, setup.constRoot,setup.starkInfo);
+    const verifierResult= await starkVerify(starkProof.proof, starkProof.publics, setup.constRoot,setup.starkInfo);
     if (verifierResult === true) { console.log("VALID proof!");
      } else { console.log("INVALID proof!"); }
     
-    return proverResult;
+
+    let stark_verifier_circom = await pil2circom(pil,setup.constRoot,setup.starkInfo);
+    await fs.promises.writeFile(fileCachePil + ".stark_verifier.circom", stark_verifier_circom , "utf8");
+
+
 }
+
+
+function stringifyBigInt(key, value) {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
+}
+
+
+
 
 const F = new F1Field("0xFFFFFFFF00000001");
 const n1 = F.e(-1);
